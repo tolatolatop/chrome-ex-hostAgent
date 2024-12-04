@@ -13,6 +13,9 @@
         "sidePanel",
         "tabs"
     ],
+    "host_permissions": [
+        "*://*.baidu.com/*"
+    ],
     "content_scripts": [
         {
             "matches": [

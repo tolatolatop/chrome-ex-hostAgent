@@ -4,6 +4,7 @@ const SidePanel = () => {
     const [name, setName] = useState('');
     const [result, setResult] = useState('');
     const [error, setError] = useState('');
+    const [tiebaData, setTiebaData] = useState(null);
 
     // 监听来自 content script 的消息
     chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -54,6 +55,48 @@ const SidePanel = () => {
         }
     };
 
+    const handleGetData = async () => {
+        setError('');
+        
+        try {
+            const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+            const currentTab = tabs[0];
+            
+            if (!currentTab) {
+                setError('无法获取当前标签页');
+                return;
+            }
+
+            if (!currentTab.url) {
+                setError('无法获取当前页面 URL');
+                return;
+            }
+
+            if (!currentTab.url.includes('baidu.com')) {
+                setError('请在百度网站使用此功能');
+                return;
+            }
+
+            try {
+                const response = await chrome.tabs.sendMessage(currentTab.id, {
+                    type: 'GET_DATA'
+                });
+                
+                if (response.success) {
+                    setTiebaData(response.data);
+                } else {
+                    setError(response.error || '获取数据失败');
+                }
+            } catch (err) {
+                console.error('发送消息失败:', err);
+                setError('无法与页面通信，请刷新页面后重试');
+            }
+        } catch (err) {
+            console.error('获取标签页失败:', err);
+            setError('发生错误，请重试');
+        }
+    };
+
     return (
         <div style={{ padding: '20px' }}>
             <h1>用户确认</h1>
@@ -88,6 +131,21 @@ const SidePanel = () => {
                     提交
                 </button>
             </form>
+            <div style={{ marginTop: '20px' }}>
+                <button 
+                    onClick={handleGetData}
+                    style={{
+                        padding: '8px 16px',
+                        backgroundColor: '#2196F3',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer'
+                    }}
+                >
+                    获取贴吧数据
+                </button>
+            </div>
             {error && (
                 <div style={{ 
                     marginTop: '15px',
@@ -107,6 +165,27 @@ const SidePanel = () => {
                     borderRadius: '4px'
                 }}>
                     {result}
+                </div>
+            )}
+            {tiebaData && (
+                <div style={{ 
+                    marginTop: '15px',
+                    padding: '10px',
+                    backgroundColor: '#e3f2fd',
+                    borderRadius: '4px'
+                }}>
+                    <h3>匹配结果：</h3>
+                    <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                        {tiebaData.matches.map((match, index) => (
+                            <li key={index}>{match}</li>
+                        ))}
+                    </ul>
+                    <p style={{ marginTop: '10px', marginBottom: 0 }}>
+                        共找到 {tiebaData.count} 个匹配
+                    </p>
+                    <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666' }}>
+                        获取时间：{new Date(tiebaData.timestamp).toLocaleString()}
+                    </p>
                 </div>
             )}
         </div>
