@@ -11,7 +11,8 @@
     "permissions": [
         "activeTab",
         "sidePanel",
-        "tabs"
+        "tabs",
+        "cookies"
     ],
     "host_permissions": [
         "*://*.baidu.com/*"

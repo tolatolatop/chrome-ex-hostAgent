@@ -43,7 +43,19 @@ async function fetchTiebaData() {
         // 发起请求获取贴吧页面
         const response = await fetch('https://tieba.baidu.com/', {
             method: 'GET',
-            credentials: 'omit' // 不发送 cookies
+            credentials: 'include', // 修改为 include 以发送 cookies
+            headers: {
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+                'Upgrade-Insecure-Requests': '1',
+                'User-Agent': navigator.userAgent, // 使用当前浏览器的 User-Agent
+                'X-Chrome-Extension': 'yes'
+            },
+            referrer: 'https://www.baidu.com/', // 添加引用来源
+            referrerPolicy: 'strict-origin-when-cross-origin',
+            mode: 'cors' // 允许跨域请求
         });
 
         if (!response.ok) {
