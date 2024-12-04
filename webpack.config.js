@@ -4,7 +4,7 @@ const CopyPlugin = require('copy-webpack-plugin');
 
 module.exports = {
     entry: {
-        popup: './src/popup/index.js',
+        'side-panel': './src/side-panel/index.js',
         content: './src/content/content.js'
     },
     output: {
@@ -50,9 +50,9 @@ module.exports = {
     },
     plugins: [
         new HtmlWebpackPlugin({
-            template: './src/popup/popup.html',
-            filename: 'popup.html',
-            chunks: ['popup'],
+            template: './src/side-panel/side-panel.html',
+            filename: 'side-panel.html',
+            chunks: ['side-panel'],
             minify: {
                 removeComments: true,
                 collapseWhitespace: true
