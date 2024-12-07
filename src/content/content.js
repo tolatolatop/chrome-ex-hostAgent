@@ -18,8 +18,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'GET_DATA') {
-        // 获取贴吧数据
-        fetchTiebaData()
+        // 从消息中获取请求参数
+        const { url, headers = {}, method = 'GET', body } = message.data || {};
+
+        if (!url) {
+            sendResponse({
+                success: false,
+                error: '缺少必要的URL参数'
+            });
+            return true;
+        }
+
+        // 执行fetch请求
+        fetchData(url, headers, method, body)
             .then(result => {
                 console.log('获取到的数据:', result);
                 sendResponse({ success: true, data: result });
@@ -37,47 +48,50 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
 });
 
-// 获取贴吧数据的函数
-async function fetchTiebaData() {
+// 添加body参数的fetch函数
+async function fetchData(url, headers = {}, method = 'GET', body = null) {
     try {
-        // 发起请求获取贴吧页面
-        const response = await fetch('https://tieba.baidu.com/', {
-            method: 'GET',
-            credentials: 'include', // 修改为 include 以发送 cookies
-            headers: {
-                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
-                'Cache-Control': 'no-cache',
-                'Pragma': 'no-cache',
-                'Upgrade-Insecure-Requests': '1',
-                'User-Agent': navigator.userAgent, // 使用当前浏览器的 User-Agent
-                'X-Chrome-Extension': 'yes'
-            },
-            referrer: 'https://www.baidu.com/', // 添加引用来源
-            referrerPolicy: 'strict-origin-when-cross-origin',
-            mode: 'cors' // 允许跨域请求
-        });
+        // 合并默认headers和传入的headers
+        const defaultHeaders = {
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+            'Cache-Control': 'no-cache',
+            'Pragma': 'no-cache',
+            'User-Agent': navigator.userAgent,
+        };
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+        // 构建请求配置
+        const fetchConfig = {
+            method,
+            credentials: 'include',
+            headers: { ...defaultHeaders, ...headers },
+            referrerPolicy: 'strict-origin-when-cross-origin',
+            mode: 'cors'
+        };
+
+        // 如果有body，则添加到请求配置中
+        if (body) {
+            // 如果body是对象且没有指定Content-Type，默认使用JSON
+            if (typeof body === 'object' && !headers['Content-Type']) {
+                fetchConfig.headers['Content-Type'] = 'application/json';
+                fetchConfig.body = JSON.stringify(body);
+            } else {
+                fetchConfig.body = body;
+            }
         }
 
-        // 获取页面内容
-        const text = await response.text();
+        const response = await fetch(url, fetchConfig);
+        const responseText = await response.text();
 
-        // 使用正则表达式匹配数字+W的模式
-        const pattern = /\d+W/g;
-        const matches = text.match(pattern) || [];
-
-        // 返回所有匹配结果
         return {
-            matches: matches,
-            count: matches.length,
-            timestamp: new Date().toISOString()
+            status: response.status,
+            content: responseText,
+            headers: Object.fromEntries(response.headers.entries()),
+            url: response.url
         };
 
     } catch (error) {
-        console.error('获取贴吧数据失败:', error);
-        throw new Error('获取贴吧数据失败: ' + error.message);
+        console.error('请求失败:', error);
+        throw new Error('请求失败: ' + error.message);
     }
 }
