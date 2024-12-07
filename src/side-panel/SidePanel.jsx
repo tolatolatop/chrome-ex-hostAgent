@@ -33,6 +33,60 @@ const SidePanel = () => {
     const [inputMessage, setInputMessage] = useState('');
     const [username, setUsername] = useState('用户');
 
+    // 处理fetch命令
+    const handleFetchCommand = useCallback(async (fetchData) => {
+        try {
+            // 获取当前标签页
+            const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+            
+            if (!tab) {
+                throw new Error('未找到活动标签页');
+            }
+
+            // 发送GET_DATA消息到content script
+            const data = {
+                url: fetchData.url,
+                method: fetchData.method,
+                headers: fetchData.headers,
+                body: fetchData.data  // 将data作为body发送
+            }
+            console.log(data);
+            const response = await chrome.tabs.sendMessage(tab.id, {
+                type: 'GET_DATA',
+                data: data
+            });
+
+            // 发送fetch响应回服务器
+            if (socket) {
+                const message = {
+                    type: MessageType.FETCH_RESPONSE,
+                    role: MessageRole.USER,
+                    content: `Fetch请求完成: ${fetchData.url}`,
+                    sender: username,
+                    timestamp: new Date().toISOString(),
+                    data: response
+                };
+                console.log(message);
+                socket.send(JSON.stringify(message));
+            }
+
+        } catch (error) {
+            console.error('执行fetch命令失败:', error);
+            // 发送错误消息回服务器
+            if (socket) {
+                const message = {
+                    type: MessageType.ERROR,
+                    role: MessageRole.USER,
+                    content: `Fetch请求失败: ${error.message}`,
+                    sender: username,
+                    timestamp: new Date().toISOString(),
+                    data: { error: error.message }
+                };
+                socket.send(JSON.stringify(message));
+            }
+        }
+    }, [socket, username]);
+
     // 初始化WebSocket连接
     useEffect(() => {
         const ws = new WebSocket('ws://localhost:8000/ws');
@@ -42,15 +96,24 @@ const SidePanel = () => {
             setConnected(true);
         };
 
-        ws.onmessage = (event) => {
+        ws.onmessage = async (event) => {
             try {
                 const message = JSON.parse(event.data);
+                console.log(message);
+                // 检查是否是fetch命令
+                if (message.type === MessageType.COMMAND && 
+                    message.command === CommandType.FETCH && 
+                    message.data) {
+                    // 处理fetch命令
+                    await handleFetchCommand(message.data);
+                }
+
                 setMessages(prev => [...prev, {
                     ...message,
                     time: new Date(message.timestamp)
                 }]);
             } catch (error) {
-                console.error('解析消息失败:', error);
+                console.error('处理消息失败:', error);
             }
         };
 

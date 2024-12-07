@@ -12,18 +12,19 @@
         "activeTab",
         "sidePanel",
         "tabs",
-        "cookies",
-        "webRequest"
+        "cookies"
     ],
     "host_permissions": [
         "*://*.baidu.com/*",
-        "ws://localhost:8000/*",
-        "http://localhost:8000/*"
+        "*://*.example.com/*",
+        "http://localhost:*/*",
+        "ws://localhost:*/*"
     ],
     "content_scripts": [
         {
             "matches": [
-                "*://*.baidu.com/*"
+                "*://*.baidu.com/*",
+                "*://*.example.com/*"
             ],
             "js": [
                 "content.js"

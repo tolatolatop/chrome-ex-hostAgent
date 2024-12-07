@@ -69,8 +69,8 @@ async function fetchData(url, headers = {}, method = 'GET', body = null) {
             mode: 'cors'
         };
 
-        // 如果有body，则添加到请求配置中
-        if (body) {
+        // 只有非GET/HEAD请求才添加body
+        if (body && !['GET', 'HEAD'].includes(method.toUpperCase())) {
             // 如果body是对象且没有指定Content-Type，默认使用JSON
             if (typeof body === 'object' && !headers['Content-Type']) {
                 fetchConfig.headers['Content-Type'] = 'application/json';
@@ -78,6 +78,18 @@ async function fetchData(url, headers = {}, method = 'GET', body = null) {
             } else {
                 fetchConfig.body = body;
             }
+        }
+
+        // 如果是GET请求且有body参数，将其转换为URL查询参数
+        if (body && method.toUpperCase() === 'GET') {
+            const params = new URLSearchParams();
+            if (typeof body === 'object') {
+                Object.entries(body).forEach(([key, value]) => {
+                    params.append(key, value);
+                });
+            }
+            // 添加查询参数到URL
+            url = `${url}${url.includes('?') ? '&' : '?'}${params.toString()}`;
         }
 
         const response = await fetch(url, fetchConfig);
