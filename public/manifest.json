@@ -1,7 +1,8 @@
 {
     "manifest_version": 3,
-    "name": "我的 Chrome 扩展",
+    "name": "Host助手",
     "version": "1.0.0",
+    "action": {},
     "side_panel": {
         "default_path": "side-panel.html"
     },
@@ -31,5 +32,8 @@
             ],
             "run_at": "document_end"
         }
-    ]
+    ],
+    "background": {
+        "service_worker": "background.js"
+    }
 }
