@@ -33,7 +33,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         fetchData(url, headers, method, body)
             .then(result => {
                 console.log('获取到的数据:', result);
-                sendResponse({ success: true, data: result });
+                sendResponse({
+                    success: true, data: {
+                        "status": result.status,
+                        "content": result.content,
+                    }
+                });
             })
             .catch(error => {
                 console.error('获取数据失败:', error);
