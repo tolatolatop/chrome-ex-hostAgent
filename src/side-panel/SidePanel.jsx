@@ -34,7 +34,8 @@ const SidePanel = () => {
     const [username, setUsername] = useState('用户');
 
     // 处理fetch命令
-    const handleFetchCommand = useCallback(async (fetchData) => {
+    const handleFetchCommand = useCallback(async (socket, fetchData) => {
+        console.log("执行fetch命令:", fetchData);
         try {
             // 获取当前标签页
             const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -50,13 +51,15 @@ const SidePanel = () => {
                 headers: fetchData.headers,
                 body: fetchData.data  // 将data作为body发送
             }
-            console.log(data);
+            console.log("发送消息到content script:", data);
             const response = await chrome.tabs.sendMessage(tab.id, {
                 type: 'GET_DATA',
                 data: data
             });
 
             // 发送fetch响应回服务器
+            console.log("响应:", response);
+            console.log("发送消息到服务器:", socket);
             if (socket) {
                 const message = {
                     type: MessageType.FETCH_RESPONSE,
@@ -66,7 +69,7 @@ const SidePanel = () => {
                     timestamp: new Date().toISOString(),
                     data: response
                 };
-                console.log(message);
+                console.log("发送消息到服务器:", message);
                 socket.send(JSON.stringify(message));
             }
 
@@ -85,7 +88,7 @@ const SidePanel = () => {
                 socket.send(JSON.stringify(message));
             }
         }
-    }, [socket, username]);
+    }, []);
 
     // 初始化WebSocket连接
     useEffect(() => {
@@ -99,13 +102,12 @@ const SidePanel = () => {
         ws.onmessage = async (event) => {
             try {
                 const message = JSON.parse(event.data);
-                console.log(message);
                 // 检查是否是fetch命令
                 if (message.type === MessageType.COMMAND && 
                     message.command === CommandType.FETCH && 
                     message.data) {
                     // 处理fetch命令
-                    await handleFetchCommand(message.data);
+                    await handleFetchCommand(ws, message.data);
                 }
 
                 setMessages(prev => [...prev, {
