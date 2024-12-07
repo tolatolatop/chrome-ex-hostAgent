@@ -1,193 +1,227 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+
+// 定义消息类型枚举
+const MessageType = {
+    CHAT: 'chat',
+    COMMAND: 'command',
+    RESPONSE: 'response',
+    ERROR: 'error',
+    SYSTEM: 'system',
+    FETCH_RESPONSE: 'fetch_response'
+};
+
+const MessageRole = {
+    USER: 'user',
+    AGENT: 'agent',
+    SYSTEM: 'system'
+};
+
+const CommandType = {
+    HELP: 'help',
+    CLEAR: 'clear',
+    RENAME: 'rename',
+    STATUS: 'status',
+    HISTORY: 'history',
+    UNKNOWN: 'unknown',
+    FETCH: 'fetch'
+};
 
 const SidePanel = () => {
-    const [name, setName] = useState('');
-    const [result, setResult] = useState('');
-    const [error, setError] = useState('');
-    const [tiebaData, setTiebaData] = useState(null);
+    const [socket, setSocket] = useState(null);
+    const [connected, setConnected] = useState(false);
+    const [messages, setMessages] = useState([]);
+    const [inputMessage, setInputMessage] = useState('');
+    const [username, setUsername] = useState('用户');
 
-    // 监听来自 content script 的消息
-    chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-        if (message.type === 'CONFIRM_RESULT') {
-            setResult(message.data === "yes" ? '用户点击了确认' : '用户点击了取消');
-            setError('');
-        }
-    });
+    // 初始化WebSocket连接
+    useEffect(() => {
+        const ws = new WebSocket('ws://localhost:8000/ws');
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        
-        try {
-            // 获取当前标签页
-            const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-            const currentTab = tabs[0];
-            
-            if (!currentTab) {
-                setError('无法获取当前标签页');
-                return;
-            }
+        ws.onopen = () => {
+            console.log('WebSocket连接已建立');
+            setConnected(true);
+        };
 
-            if (!currentTab.url) {
-                setError('无法获取当前页面 URL');
-                return;
-            }
-
-            // 检查当前页面是否是百度域名
-            if (!currentTab.url.includes('baidu.com')) {
-                setError('请在百度网站使用此功能');
-                return;
-            }
-
-            // 发送消息到 content script
+        ws.onmessage = (event) => {
             try {
-                await chrome.tabs.sendMessage(currentTab.id, {
-                    type: 'SHOW_CONFIRM',
-                    data: name
-                });
-            } catch (err) {
-                console.error('发送消息失败:', err);
-                setError('无法与页面通信，请刷新页面后重试');
+                const message = JSON.parse(event.data);
+                setMessages(prev => [...prev, {
+                    ...message,
+                    time: new Date(message.timestamp)
+                }]);
+            } catch (error) {
+                console.error('解析消息失败:', error);
             }
-        } catch (err) {
-            console.error('获取标签页失败:', err);
-            setError('发生错误，请重试');
+        };
+
+        ws.onclose = () => {
+            console.log('WebSocket连接已关闭');
+            setConnected(false);
+        };
+
+        ws.onerror = (error) => {
+            console.error('WebSocket错误:', error);
+            setConnected(false);
+        };
+
+        setSocket(ws);
+
+        return () => {
+            if (ws) {
+                ws.close();
+            }
+        };
+    }, []);
+
+    // 发送消息
+    const sendMessage = useCallback(() => {
+        if (socket && inputMessage) {
+            // 检查是否是命令
+            if (inputMessage.startsWith('/')) {
+                const [command, ...args] = inputMessage.slice(1).split(' ');
+                const message = {
+                    type: MessageType.COMMAND,
+                    role: MessageRole.USER,
+                    content: inputMessage,
+                    sender: username,
+                    timestamp: new Date().toISOString(),
+                    command: CommandType[command.toUpperCase()] || CommandType.UNKNOWN,
+                    data: { args }
+                };
+                socket.send(JSON.stringify(message));
+            } else {
+                // 普通聊天消息
+                const message = {
+                    type: MessageType.CHAT,
+                    role: MessageRole.USER,
+                    content: inputMessage,
+                    sender: username,
+                    timestamp: new Date().toISOString()
+                };
+                socket.send(JSON.stringify(message));
+            }
+            setInputMessage('');
         }
-    };
+    }, [socket, inputMessage, username]);
 
-    const handleGetData = async () => {
-        setError('');
-        
-        try {
-            const tabs = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-            const currentTab = tabs[0];
-            
-            if (!currentTab) {
-                setError('无法获取当前标签页');
-                return;
-            }
+    // 获取消息样式
+    const getMessageStyle = (message) => {
+        const baseStyle = {
+            marginBottom: '10px',
+            textAlign: message.role === MessageRole.USER ? 'right' : 'left'
+        };
 
-            if (!currentTab.url) {
-                setError('无法获取当前页面 URL');
-                return;
-            }
+        const bubbleStyle = {
+            padding: '8px',
+            borderRadius: '4px',
+            display: 'inline-block',
+            maxWidth: '80%'
+        };
 
-            if (!currentTab.url.includes('baidu.com')) {
-                setError('请在百度网站使用此功能');
-                return;
-            }
-
-            try {
-                const response = await chrome.tabs.sendMessage(currentTab.id, {
-                    type: 'GET_DATA'
-                });
-                
-                if (response.success) {
-                    setTiebaData(response.data);
-                } else {
-                    setError(response.error || '获取数据失败');
-                }
-            } catch (err) {
-                console.error('发送消息失败:', err);
-                setError('无法与页面通信，请刷新页面后重试');
-            }
-        } catch (err) {
-            console.error('获取标签页失败:', err);
-            setError('发生错误，请重试');
+        switch (message.type) {
+            case MessageType.ERROR:
+                bubbleStyle.background = '#ffebee';
+                break;
+            case MessageType.SYSTEM:
+                bubbleStyle.background = '#f3e5f5';
+                break;
+            case MessageType.COMMAND:
+            case MessageType.RESPONSE:
+                bubbleStyle.background = '#e8f5e9';
+                break;
+            default:
+                bubbleStyle.background = message.role === MessageRole.USER ? '#e3f2fd' : '#f5f5f5';
         }
+
+        return { containerStyle: baseStyle, bubbleStyle };
     };
 
     return (
         <div style={{ padding: '20px' }}>
-            <h1>用户确认</h1>
-            <form onSubmit={handleSubmit}>
-                <div style={{ marginBottom: '15px' }}>
-                    <label style={{ display: 'block', marginBottom: '5px' }}>
-                        请输入姓名：
-                    </label>
-                    <input 
-                        type="text"
-                        value={name}
-                        onChange={(e) => setName(e.target.value)}
-                        style={{
-                            width: '100%',
-                            padding: '8px',
-                            borderRadius: '4px',
-                            border: '1px solid #ccc'
-                        }}
-                    />
+            <div style={{ marginBottom: '20px' }}>
+                <h3>WebSocket通信</h3>
+                <div style={{ marginBottom: '10px' }}>
+                    状态: <span style={{ color: connected ? 'green' : 'red' }}>
+                        {connected ? '已连接' : '未连接'}
+                    </span>
+                    {!connected && (
+                        <button onClick={() => window.location.reload()} style={{ marginLeft: '10px' }}>
+                            重新连接
+                        </button>
+                    )}
                 </div>
+            </div>
+
+            <div style={{ 
+                height: '300px', 
+                overflowY: 'auto',
+                border: '1px solid #ccc',
+                padding: '10px',
+                marginBottom: '20px'
+            }}>
+                {messages.map((msg, index) => {
+                    const { containerStyle, bubbleStyle } = getMessageStyle(msg);
+                    return (
+                        <div key={index} style={containerStyle}>
+                            <div style={bubbleStyle}>
+                                <div style={{ fontSize: '0.8em', color: '#666', marginBottom: '4px' }}>
+                                    {msg.sender} ({msg.type})
+                                </div>
+                                <div>{msg.content}</div>
+                                {msg.data && (
+                                    <pre style={{ 
+                                        fontSize: '0.9em',
+                                        background: '#f8f9fa',
+                                        padding: '4px',
+                                        borderRadius: '2px',
+                                        marginTop: '4px'
+                                    }}>
+                                        {JSON.stringify(msg.data, null, 2)}
+                                    </pre>
+                                )}
+                                <div style={{
+                                    fontSize: '0.8em',
+                                    color: '#666',
+                                    marginTop: '4px'
+                                }}>
+                                    {new Date(msg.timestamp).toLocaleTimeString()}
+                                </div>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+                <input
+                    type="text"
+                    value={inputMessage}
+                    onChange={(e) => setInputMessage(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                    placeholder="输入消息或命令 (/help 查看帮助)..."
+                    style={{ 
+                        flex: 1,
+                        padding: '8px',
+                        borderRadius: '4px',
+                        border: '1px solid #ccc'
+                    }}
+                    disabled={!connected}
+                />
                 <button 
-                    type="submit"
+                    onClick={sendMessage}
+                    disabled={!connected || !inputMessage}
                     style={{
                         padding: '8px 16px',
-                        backgroundColor: '#4CAF50',
+                        borderRadius: '4px',
+                        backgroundColor: connected ? '#1976d2' : '#ccc',
                         color: 'white',
                         border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
+                        cursor: connected ? 'pointer' : 'not-allowed'
                     }}
                 >
-                    提交
-                </button>
-            </form>
-            <div style={{ marginTop: '20px' }}>
-                <button 
-                    onClick={handleGetData}
-                    style={{
-                        padding: '8px 16px',
-                        backgroundColor: '#2196F3',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer'
-                    }}
-                >
-                    获取贴吧数据
+                    发送
                 </button>
             </div>
-            {error && (
-                <div style={{ 
-                    marginTop: '15px',
-                    padding: '10px',
-                    backgroundColor: '#ffebee',
-                    color: '#c62828',
-                    borderRadius: '4px'
-                }}>
-                    {error}
-                </div>
-            )}
-            {result && !error && (
-                <div style={{ 
-                    marginTop: '15px',
-                    padding: '10px',
-                    backgroundColor: '#f0f0f0',
-                    borderRadius: '4px'
-                }}>
-                    {result}
-                </div>
-            )}
-            {tiebaData && (
-                <div style={{ 
-                    marginTop: '15px',
-                    padding: '10px',
-                    backgroundColor: '#e3f2fd',
-                    borderRadius: '4px'
-                }}>
-                    <h3>匹配结果：</h3>
-                    <ul style={{ margin: 0, paddingLeft: '20px' }}>
-                        {tiebaData.matches.map((match, index) => (
-                            <li key={index}>{match}</li>
-                        ))}
-                    </ul>
-                    <p style={{ marginTop: '10px', marginBottom: 0 }}>
-                        共找到 {tiebaData.count} 个匹配
-                    </p>
-                    <p style={{ margin: '5px 0 0 0', fontSize: '12px', color: '#666' }}>
-                        获取时间：{new Date(tiebaData.timestamp).toLocaleString()}
-                    </p>
-                </div>
-            )}
         </div>
     );
 };
