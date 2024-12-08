@@ -44,22 +44,30 @@ const SidePanel = () => {
                 throw new Error('未找到活动标签页');
             }
 
-            // 发送GET_DATA消息到content script
+            // 发送GET_DATA消息到content script并处理可能的错误
             const data = {
                 url: fetchData.url,
                 method: fetchData.method,
                 headers: fetchData.headers,
-                body: fetchData.data  // 将data作为body发送
+                body: fetchData.data
             }
             console.log("发送消息到content script:", data);
-            const response = await chrome.tabs.sendMessage(tab.id, {
-                type: 'GET_DATA',
-                data: data
+            
+            // 使用 Promise 包装 chrome.tabs.sendMessage 以便更好地处理错误
+            const response = await new Promise((resolve, reject) => {
+                chrome.tabs.sendMessage(tab.id, {
+                    type: 'GET_DATA',
+                    data: data
+                }, (response) => {
+                    if (chrome.runtime.lastError) {
+                        reject(new Error('请刷新网页或检查当前页面是否支持此操作'));
+                    } else {
+                        resolve(response);
+                    }
+                });
             });
 
             // 发送fetch响应回服务器
-            console.log("响应:", response);
-            console.log("发送消息到服务器:", socket);
             if (socket) {
                 const message = {
                     type: MessageType.FETCH_RESPONSE,
@@ -69,13 +77,12 @@ const SidePanel = () => {
                     timestamp: new Date().toISOString(),
                     data: response
                 };
-                console.log("发送消息到服务器:", message);
                 socket.send(JSON.stringify(message));
             }
 
         } catch (error) {
             console.error('执行fetch命令失败:', error);
-            // 发送错误消息回服务器
+            // 发送更友好的错误消息回服务器
             if (socket) {
                 const message = {
                     type: MessageType.ERROR,
@@ -83,12 +90,15 @@ const SidePanel = () => {
                     content: `Fetch请求失败: ${error.message}`,
                     sender: username,
                     timestamp: new Date().toISOString(),
-                    data: { error: error.message }
+                    data: { 
+                        error: error.message,
+                        suggestion: '如果问题持续存在，请尝试刷新页面或检查当前页面是否支持此操作'
+                    }
                 };
                 socket.send(JSON.stringify(message));
             }
         }
-    }, []);
+    }, [username]);
 
     // 初始化WebSocket连接
     useEffect(() => {
