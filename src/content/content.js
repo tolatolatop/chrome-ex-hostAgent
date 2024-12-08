@@ -29,8 +29,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             return true;
         }
 
+        // 处理请求参数
+        const requestBody = addBiliBiliCSRF(url, headers, body);
+
         // 执行fetch请求
-        fetchData(url, headers, method, body)
+        fetchData(url, headers, method, requestBody)
             .then(result => {
                 console.log('获取到的数据:', result);
                 sendResponse({
@@ -110,5 +113,39 @@ async function fetchData(url, headers = {}, method = 'GET', body = null) {
     } catch (error) {
         console.error('请求失败:', error);
         throw new Error('请求失败: ' + error.message);
+    }
+}
+
+// 添加处理 BiliBili API CSRF 的函数
+function addBiliBiliCSRF(url, headers, body) {
+    try {
+        const isBiliBiliApi = new URL(url).hostname === 'api.bilibili.com';
+        const isFormUrlEncoded = headers['Content-Type'] === 'application/x-www-form-urlencoded';
+
+        if (!isBiliBiliApi || !isFormUrlEncoded) {
+            return body;
+        }
+
+        // 获取 bili_jct cookie
+        const cookies = document.cookie.split(';');
+        const biliJct = cookies
+            .find(cookie => cookie.trim().startsWith('bili_jct='))
+            ?.split('=')[1];
+
+        if (!biliJct) {
+            return body;
+        }
+
+        // 处理 body 参数
+        if (typeof body === 'string') {
+            return `${body}&csrf=${biliJct}`;
+        }
+        if (typeof body === 'object') {
+            return { ...body, csrf: biliJct };
+        }
+        return `csrf=${biliJct}`;
+    } catch (error) {
+        console.error('处理 BiliBili CSRF 时出错:', error);
+        return body;
     }
 }
