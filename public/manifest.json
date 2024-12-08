@@ -25,7 +25,8 @@
         {
             "matches": [
                 "*://*.baidu.com/*",
-                "*://*.example.com/*"
+                "*://*.example.com/*",
+                "*://*.bilibili.com/*"
             ],
             "js": [
                 "content.js"
