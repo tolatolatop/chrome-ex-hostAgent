@@ -1,0 +1,26 @@
+@startuml bot.pu
+
+group Initialization
+    User -> SidePanel: Open SidePanel
+    SidePanel -> Backend: Open Bot Session
+    Backend -> SidePanel: Return BotID
+    SidePanel -> UI: Get UserID
+    UI -> SidePanel: Return UserID
+    SidePanel -> Backend: Send UserID with BotID
+    Backend -> Backend: Save BotID and UserID
+end
+
+group Chat
+    User -> UI: Send message
+    UI -> Backend: Send message with UserID
+    Backend -> Backend: Get BotID with UserID
+    Backend -> SidePanel: Get Context with BotID
+    SidePanel -> Content: Get Context
+    Content -> SidePanel: Return Context
+    SidePanel -> Backend: Return Context
+    Backend -> Backend: Handle message with context
+    Backend -> UI: Return message
+    UI -> User: Show message
+end
+
+@enduml
