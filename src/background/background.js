@@ -1,3 +1,9 @@
 chrome.action.onClicked.addListener((tab) => {
     chrome.sidePanel.open({ windowId: tab.windowId });
-}); 
+});
+
+
+chrome.runtime.onMessage.addListener(function (request, sender, sendResponse) {
+    chrome.tabs.sendMessage(sender.tab.id, request);
+    sendResponse({});
+});

@@ -28,6 +28,7 @@
                 "*://*.example.com/*",
                 "*://*.bilibili.com/*"
             ],
+            "all_frames": true,
             "js": [
                 "content.js"
             ],
