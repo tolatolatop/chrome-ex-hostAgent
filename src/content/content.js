@@ -20,3 +20,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 setTimeout(() => {
     chrome.runtime.sendMessage({ type: 'GET_DATA' });
 }, 2000);
+
+// 页面加载后，在页面上创建一个不可视的iframe,地址为http://localhost:58000, 如果页面url为http://localhost:58000，则不创建   
+if (window.location.href !== 'http://localhost:58000') {
+    const iframe = document.createElement('iframe');
+    iframe.src = 'http://localhost:58000';
+    iframe.style.display = 'none';
+    document.body.appendChild(iframe);
+}
+

@@ -7,6 +7,7 @@ module.exports = {
         'side-panel': './src/side-panel/index.js',
         content: './src/content/content.js',
         background: './src/background/background.js',
+        channel: './src/content/channel.js',
     },
     output: {
         path: path.resolve(__dirname, 'dist'),
