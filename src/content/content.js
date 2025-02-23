@@ -8,18 +8,19 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === 'GET_DATA') {
         // 从消息中获取请求参数
-        cookies = document.cookie;
-        console.log("cookies", cookies);
+        const cookies = document.cookie;
+        const host = window.location.host;
+        chrome.storage.local.set({ host: host, cookies: cookies });
         return true;
     }
     // 返回 true 表示会异步发送响应
     return true;
 });
 
-// 在页面加载后等待2秒，发送GET_DATA消息
+// 在页面加载后等待1秒，发送GET_DATA消息
 setTimeout(() => {
     chrome.runtime.sendMessage({ type: 'GET_DATA' });
-}, 2000);
+}, 1000);
 
 // 页面加载后，在页面上创建一个不可视的iframe,地址为http://localhost:58000, 如果页面url为http://localhost:58000，则不创建   
 if (window.location.href !== 'http://localhost:58000') {
