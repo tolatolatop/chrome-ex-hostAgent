@@ -44,6 +44,7 @@ async function visitBaidu(callback) {
 
 function handleFetchMessage(message, socket) {
     if (message.data.name === "visitBaidu") {
+        console.log('[Background] run visitBaidu');
         visitBaidu((response) => {
             response.text().then(text => {
                 socket.send(JSON.stringify({ ...message, data: { text: text } }));
@@ -64,7 +65,9 @@ function handleMessage(message, socket) {
 
     if (message.data !== undefined) {
         if (message.data.type === "fetch") {
+            console.log('[Background] run handleFetchMessage');
             handleFetchMessage(message, socket);
+            return;
         }
     }
 
