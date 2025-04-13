@@ -1,6 +1,15 @@
 let socket = null;
 let reconnectTimer = null;  // 添加重连定时器标志
 
+// 监听来自 content script 的消息
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.type === 'COOKIES_UPDATED') {
+        console.log(`[MCP] 🍪 Cookies updated for host: ${message.host}`);
+        console.log(`[MCP] 📦 Cookies content: ${message.cookies}`);
+        return true;
+    }
+});
+
 function connectWebSocket() {
     const WS_URL = "ws://localhost:8000/ws/1/client"; // 替换为你的后端地址
     socket = new WebSocket(WS_URL);

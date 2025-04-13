@@ -11,7 +11,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             // 更新当前 host 的 cookies
             hostCookies[host] = cookies;
             // 保存更新后的 host-cookies 对
-            chrome.storage.local.set({ hostCookies });
+            chrome.storage.local.set({ hostCookies }, () => {
+                // 发送通知给 background
+                chrome.runtime.sendMessage({
+                    type: 'COOKIES_UPDATED',
+                    host: host,
+                    cookies: cookies
+                });
+            });
         });
         return true;
     }
