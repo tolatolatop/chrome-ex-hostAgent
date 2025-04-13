@@ -3,9 +3,6 @@
     "name": "Host助手",
     "version": "1.0.0",
     "action": {},
-    "side_panel": {
-        "default_path": "side-panel.html"
-    },
     "content_security_policy": {
         "extension_pages": "script-src 'self'; object-src 'self'"
     },
