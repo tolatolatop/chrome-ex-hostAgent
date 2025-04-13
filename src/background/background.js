@@ -1,4 +1,5 @@
 let socket = null;
+let reconnectTimer = null;  // 添加重连定时器标志
 
 function connectWebSocket() {
     const WS_URL = "ws://localhost:8000/ws/1/client"; // 替换为你的后端地址
@@ -6,25 +7,42 @@ function connectWebSocket() {
 
     socket.onopen = () => {
         console.log("[MCP] ✅ WebSocket connected");
+        // 连接成功后清除重连定时器
+        if (reconnectTimer) {
+            clearTimeout(reconnectTimer);
+            reconnectTimer = null;
+        }
     };
 
     socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
         console.log("[MCP] 📩 Received:", message);
         if (message.type !== "ping") {
-            socket.send(JSON.stringify({ "type": "pong", "data": message }));
+            socket.send(JSON.stringify(message));
         }
     };
 
     socket.onclose = () => {
         console.warn("[MCP] 🔌 Connection closed. Reconnecting in 3s...");
-        setTimeout(connectWebSocket, 3000);
+        // 确保只有一个重连任务
+        if (!reconnectTimer) {
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;  // 清除定时器引用
+                connectWebSocket();     // 重新连接
+            }, 3000);
+        }
     };
 
     socket.onerror = (err) => {
         console.error("[MCP] ❌ WebSocket error", err);
         console.warn("[MCP] 🔌 Connection failed. Reconnecting in 10s...");
-        setTimeout(connectWebSocket, 10000);
+        // 确保只有一个重连任务
+        if (!reconnectTimer) {
+            reconnectTimer = setTimeout(() => {
+                reconnectTimer = null;  // 清除定时器引用
+                connectWebSocket();     // 重新连接
+            }, 10000);
+        }
     };
 }
 
