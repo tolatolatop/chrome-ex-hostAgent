@@ -3,12 +3,29 @@ let reconnectTimer = null;  // 添加重连定时器标志
 
 // 监听来自 content script 的消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.log('[Background] 收到消息:', message);
     if (message.type === 'COOKIES_UPDATED') {
-        console.log(`[MCP] 🍪 Cookies updated for host: ${message.host}`);
-        console.log(`[MCP] 📦 Cookies content: ${message.cookies}`);
+        console.log(`[Background] 🍪 Cookies updated for host: ${message.host}`);
+        console.log(`[Background] 📦 Cookies content: ${message.cookies}`);
+        // 发送响应给 content script
+        sendResponse({ status: 'success' });
         return true;
     }
+    return true;
 });
+
+// 请求所有标签页更新 cookies
+function requestCookiesUpdate() {
+    chrome.tabs.query({}, (tabs) => {
+        tabs.forEach(tab => {
+            if (tab.url && tab.url.includes('baidu.com')) {
+                chrome.tabs.sendMessage(tab.id, { type: 'REQUEST_COOKIES' }, (response) => {
+                    console.log(`[Background] 请求 ${tab.url} 更新 cookies 的响应:`, response);
+                });
+            }
+        });
+    });
+}
 
 function connectWebSocket() {
     const WS_URL = "ws://localhost:8000/ws/1/client"; // 替换为你的后端地址
