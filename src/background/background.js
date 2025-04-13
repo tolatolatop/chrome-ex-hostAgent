@@ -27,40 +27,57 @@ function requestCookiesUpdate() {
     });
 }
 
+// 访问baidu.com
+async function visitBaidu(callback) {
+    // 使用请求直接访问
+    const cookies = await chrome.cookies.getAll({ domain: '.baidu.com' });
+    fetch('https://www.baidu.com', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Cookie': cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
+        }
+    }).then(response => {
+        callback(response);
+    });
+}
+
+// 处理接收到的消息
+function handleMessage(message, socket) {
+    console.log("[MCP] 📩 Received:", message);
+
+    if (message.type === "ping") {
+        return;
+    }
+
+    if (message.data !== undefined) {
+        visitBaidu((response) => {
+            response.text().then(text => {
+                console.log('[Background] 回传数据', text);
+                socket.send(JSON.stringify({ ...message, data: { text: text } }));
+            });
+        });
+        return;
+    }
+
+    socket.send(JSON.stringify(message));
+}
+
 function connectWebSocket() {
     const WS_URL = "ws://localhost:8000/ws/1/client"; // 替换为你的后端地址
     socket = new WebSocket(WS_URL);
 
     socket.onopen = () => {
         console.log("[MCP] ✅ WebSocket connected");
-        // 连接成功后清除重连定时器
-        if (reconnectTimer) {
-            clearTimeout(reconnectTimer);
-            reconnectTimer = null;
-        }
     };
 
     socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
-        console.log("[MCP] 📩 Received:", message);
-        if (message.type === "ping") {
-            return;
-        }
-        if (message.data !== undefined) {
-            visitBaidu((response) => {
-                response.text().then(text => {
-                    console.log('[Background] 回传数据', text);
-                    socket.send(JSON.stringify({ ...message, data: { text: text } }));
-                });
-            });
-            return;
-        }
-        socket.send(JSON.stringify(message));
+        handleMessage(message, socket);
     };
 
     socket.onclose = () => {
         console.warn("[MCP] 🔌 Connection closed. Reconnecting in 3s...");
-        // 确保只有一个重连任务
         if (!reconnectTimer) {
             reconnectTimer = setTimeout(() => {
                 reconnectTimer = null;  // 清除定时器引用
@@ -72,7 +89,6 @@ function connectWebSocket() {
     socket.onerror = (err) => {
         console.error("[MCP] ❌ WebSocket error", err);
         console.warn("[MCP] 🔌 Connection failed. Reconnecting in 10s...");
-        // 确保只有一个重连任务
         if (!reconnectTimer) {
             reconnectTimer = setTimeout(() => {
                 reconnectTimer = null;  // 清除定时器引用
@@ -96,18 +112,3 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 // 初始化连接
 connectWebSocket();
 
-
-// 访问baidu.com
-async function visitBaidu(callback) {
-    // 使用请求直接访问
-    const cookies = await chrome.cookies.getAll({ domain: '.baidu.com' });
-    fetch('https://www.baidu.com', {
-        method: 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'Cookie': cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
-        }
-    }).then(response => {
-        callback(response);
-    });
-}   
