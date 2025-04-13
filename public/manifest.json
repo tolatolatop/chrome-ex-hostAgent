@@ -14,7 +14,8 @@
         "sidePanel",
         "tabs",
         "cookies",
-        "storage"
+        "storage",
+        "alarms"
     ],
     "host_permissions": [
         "*://*.baidu.com/*",
@@ -22,30 +23,7 @@
         "http://localhost:*/*",
         "ws://localhost:*/*"
     ],
-    "content_scripts": [
-        {
-            "matches": [
-                "*://*.baidu.com/*",
-                "*://*.example.com/*",
-                "*://*.bilibili.com/*"
-            ],
-            "all_frames": true,
-            "js": [
-                "content.js"
-            ],
-            "run_at": "document_end"
-        },
-        {
-            "matches": [
-                "http://localhost:*/*"
-            ],
-            "all_frames": true,
-            "js": [
-                "channel.js"
-            ],
-            "run_at": "document_end"
-        }
-    ],
+    "content_scripts": [],
     "background": {
         "service_worker": "background.js"
     }

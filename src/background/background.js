@@ -1,18 +1,19 @@
 let socket = null;
 
 function connectWebSocket() {
-    const WS_URL = "wss://localhost:8000/ws/1/client"; // 替换为你的后端地址
+    const WS_URL = "ws://localhost:8000/ws/1/client"; // 替换为你的后端地址
     socket = new WebSocket(WS_URL);
 
     socket.onopen = () => {
         console.log("[MCP] ✅ WebSocket connected");
-        socket.send(JSON.stringify({ type: "init", source: "chrome-extension" }));
     };
 
     socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
         console.log("[MCP] 📩 Received:", message);
-        socket.send(JSON.stringify({ "type": "ping", "data": message }));
+        if (message.type !== "ping") {
+            socket.send(JSON.stringify({ "type": "pong", "data": message }));
+        }
     };
 
     socket.onclose = () => {
@@ -22,7 +23,8 @@ function connectWebSocket() {
 
     socket.onerror = (err) => {
         console.error("[MCP] ❌ WebSocket error", err);
-        socket.close();
+        console.warn("[MCP] 🔌 Connection failed. Reconnecting in 10s...");
+        setTimeout(connectWebSocket, 10000);
     };
 }
 
