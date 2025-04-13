@@ -1,7 +1,7 @@
 let socket = null;
 
 function connectWebSocket() {
-    const WS_URL = "wss://your-mcp-server.example.com/ws"; // 替换为你的后端地址
+    const WS_URL = "wss://localhost:8000/ws/1/client"; // 替换为你的后端地址
     socket = new WebSocket(WS_URL);
 
     socket.onopen = () => {
@@ -12,13 +12,7 @@ function connectWebSocket() {
     socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
         console.log("[MCP] 📩 Received:", message);
-
-        // 可选：广播到所有 tabs（或处理指令）
-        chrome.tabs.query({}, (tabs) => {
-            tabs.forEach((tab) => {
-                chrome.tabs.sendMessage(tab.id, message);
-            });
-        });
+        socket.send(JSON.stringify({ "type": "ping", "data": message }));
     };
 
     socket.onclose = () => {
