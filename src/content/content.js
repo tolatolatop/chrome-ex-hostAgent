@@ -1,12 +1,7 @@
-console.log('百度网站的 content script 已加载');
+console.log('content script 已加载');
 
-// 监听来自 popup 的消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-    console.log("接收消息", message);
-    // 获取当前页面的url地址
-    const url = window.location.href;
-
-    if (message.type === 'GET_DATA') {
+    if (message.type === 'UPDATE_COOKIES') {
         // 从消息中获取请求参数
         const cookies = document.cookie;
         const host = window.location.host;
@@ -17,16 +12,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
 });
 
-// 在页面加载后等待1秒，发送GET_DATA消息
+// 在页面加载后等待1秒，发送UPDATE_COOKIES消息
 setTimeout(() => {
-    chrome.runtime.sendMessage({ type: 'GET_DATA' });
+    chrome.runtime.sendMessage({ type: 'UPDATE_COOKIES' });
 }, 1000);
-
-// 页面加载后，在页面上创建一个不可视的iframe,地址为http://localhost:58000, 如果页面url为http://localhost:58000，则不创建   
-if (window.location.href !== 'http://localhost:58000') {
-    const iframe = document.createElement('iframe');
-    iframe.src = 'http://localhost:58000';
-    iframe.style.display = 'none';
-    document.body.appendChild(iframe);
-}
 
