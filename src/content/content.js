@@ -7,7 +7,6 @@ function updateCookies() {
     console.log('[Content] 准备更新 cookies for host:', host);
     // 获取当前存储的所有 host-cookies 对
     chrome.storage.local.get(['hostCookies'], (result) => {
-        console.log('[Content] 当前存储的 hostCookies:', result.hostCookies);
         const hostCookies = result.hostCookies || {};
         // 更新当前 host 的 cookies
         hostCookies[host] = cookies;
@@ -19,8 +18,6 @@ function updateCookies() {
                 type: 'COOKIES_UPDATED',
                 host: host,
                 cookies: cookies
-            }, (response) => {
-                console.log('[Content] 发送通知完成，收到响应:', response);
             });
         });
     });
