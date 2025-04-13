@@ -5,7 +5,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // 从消息中获取请求参数
         const cookies = document.cookie;
         const host = window.location.host;
-        chrome.storage.local.set({ host: host, cookies: cookies });
+        // 获取当前存储的所有 host-cookies 对
+        chrome.storage.local.get(['hostCookies'], (result) => {
+            const hostCookies = result.hostCookies || {};
+            // 更新当前 host 的 cookies
+            hostCookies[host] = cookies;
+            // 保存更新后的 host-cookies 对
+            chrome.storage.local.set({ hostCookies });
+        });
         return true;
     }
     // 返回 true 表示会异步发送响应
