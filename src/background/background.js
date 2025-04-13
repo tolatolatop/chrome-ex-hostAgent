@@ -1,6 +1,20 @@
 let socket = null;
 let reconnectTimer = null;  // 添加重连定时器标志
 
+// 命令处理器注册表
+const commandHandlers = {
+    fetch: {
+        visitBaidu: (message, socket) => {
+            console.log('[Background] run visitBaidu');
+            visitBaidu((response) => {
+                response.text().then(text => {
+                    socket.send(JSON.stringify({ ...message, data: { text: text } }));
+                });
+            });
+        }
+    }
+};
+
 // 监听来自 content script 的消息
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     console.log('[Background] 收到消息:', message);
@@ -42,19 +56,6 @@ async function visitBaidu(callback) {
     });
 }
 
-function handleFetchMessage(message, socket) {
-    if (message.data.name === "visitBaidu") {
-        console.log('[Background] run visitBaidu');
-        visitBaidu((response) => {
-            response.text().then(text => {
-                socket.send(JSON.stringify({ ...message, data: { text: text } }));
-            });
-        });
-        return;
-    }
-    socket.send(JSON.stringify({ ...message, data: { text: "unsupported command" } }));
-}
-
 // 处理接收到的消息
 function handleMessage(message, socket) {
     console.log("[MCP] 📩 Received:", message);
@@ -64,11 +65,20 @@ function handleMessage(message, socket) {
     }
 
     if (message.data !== undefined) {
-        if (message.data.type === "fetch") {
-            console.log('[Background] run handleFetchMessage');
-            handleFetchMessage(message, socket);
-            return;
+        const { type, name } = message.data;
+        if (type && name && commandHandlers[type] && commandHandlers[type][name]) {
+            console.log(`[Background] 执行命令: ${type}.${name}`);
+            commandHandlers[type][name](message, socket);
+        } else {
+            console.log(`[Background] 未知命令: ${type}.${name}`);
+            socket.send(JSON.stringify({
+                ...message,
+                data: {
+                    text: `Unsupported command: ${type}.${name}`
+                }
+            }));
         }
+        return;
     }
 
     socket.send(JSON.stringify(message));
