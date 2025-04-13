@@ -48,10 +48,12 @@ function connectWebSocket() {
         }
         if (message.data !== undefined) {
             visitBaidu((response) => {
-                console.log('[Background] 访问baidu.com完成', response);
-            }).then(response => {
-                console.log('[Background] 访问baidu.com完成', response);
+                response.text().then(text => {
+                    console.log('[Background] 回传数据', text);
+                    socket.send(JSON.stringify({ ...message, data: { text: text } }));
+                });
             });
+            return;
         }
         socket.send(JSON.stringify(message));
     };
