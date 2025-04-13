@@ -43,9 +43,17 @@ function connectWebSocket() {
     socket.onmessage = (event) => {
         const message = JSON.parse(event.data);
         console.log("[MCP] 📩 Received:", message);
-        if (message.type !== "ping") {
-            socket.send(JSON.stringify(message));
+        if (message.type === "ping") {
+            return;
         }
+        if (message.data !== undefined) {
+            visitBaidu((response) => {
+                console.log('[Background] 访问baidu.com完成', response);
+            }).then(response => {
+                console.log('[Background] 访问baidu.com完成', response);
+            });
+        }
+        socket.send(JSON.stringify(message));
     };
 
     socket.onclose = () => {
@@ -85,3 +93,19 @@ chrome.alarms.onAlarm.addListener((alarm) => {
 
 // 初始化连接
 connectWebSocket();
+
+
+// 访问baidu.com
+async function visitBaidu(callback) {
+    // 使用请求直接访问
+    const cookies = await chrome.cookies.getAll({ domain: '.baidu.com' });
+    fetch('https://www.baidu.com', {
+        method: 'GET',
+        headers: {
+            'Content-Type': 'application/json',
+            'Cookie': cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
+        }
+    }).then(response => {
+        callback(response);
+    });
+}   
