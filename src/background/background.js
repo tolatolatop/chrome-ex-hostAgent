@@ -42,6 +42,18 @@ async function visitBaidu(callback) {
     });
 }
 
+function handleFetchMessage(message, socket) {
+    if (message.data.name === "visitBaidu") {
+        visitBaidu((response) => {
+            response.text().then(text => {
+                socket.send(JSON.stringify({ ...message, data: { text: text } }));
+            });
+        });
+        return;
+    }
+    socket.send(JSON.stringify({ ...message, data: { text: "unsupported command" } }));
+}
+
 // 处理接收到的消息
 function handleMessage(message, socket) {
     console.log("[MCP] 📩 Received:", message);
@@ -51,13 +63,9 @@ function handleMessage(message, socket) {
     }
 
     if (message.data !== undefined) {
-        visitBaidu((response) => {
-            response.text().then(text => {
-                console.log('[Background] 回传数据', text);
-                socket.send(JSON.stringify({ ...message, data: { text: text } }));
-            });
-        });
-        return;
+        if (message.data.type === "fetch") {
+            handleFetchMessage(message, socket);
+        }
     }
 
     socket.send(JSON.stringify(message));
