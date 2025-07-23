@@ -4,6 +4,9 @@ interface MCPMessage {
     data?: {
         type: string;
         name: string;
+        url?: string;
+        uploadUrl?: string;
+        filename?: string;
         [key: string]: any;
     };
     [key: string]: any;
@@ -56,6 +59,20 @@ const commandHandlers: CommandHandlers = {
                     socket.send(JSON.stringify({ ...message, data: { text } }));
                 });
             });
+        },
+        downloadAndUpload: (message: MCPMessage, socket: WebSocket): void => {
+            console.log('[Background] run downloadAndUpload');
+            const { url, uploadUrl, filename } = message.data || {};
+
+            if (!url || !uploadUrl) {
+                socket.send(JSON.stringify({
+                    ...message,
+                    data: { error: '缺少必要的参数: url 或 uploadUrl' }
+                }));
+                return;
+            }
+
+            downloadAndUploadFile(url, uploadUrl, filename, message, socket);
         }
     }
 };
@@ -108,6 +125,177 @@ async function visitBaidu(callback: (response: Response) => void): Promise<void>
         callback(response);
     } catch (error) {
         console.error('[Background] 访问百度时出错:', error);
+    }
+}
+
+// 下载并上传文件
+async function downloadAndUploadFile(
+    downloadUrl: string,
+    uploadUrl: string,
+    filename: string | undefined,
+    message: MCPMessage,
+    socket: WebSocket
+): Promise<void> {
+    try {
+        console.log(`[Background] 开始下载文件: ${downloadUrl}`);
+
+        // 发送进度更新
+        socket.send(JSON.stringify({
+            ...message,
+            data: { status: 'downloading', progress: 0 }
+        }));
+
+        // 下载文件
+        const response = await fetch(downloadUrl);
+
+        if (!response.ok) {
+            throw new Error(`下载失败: ${response.status} ${response.statusText}`);
+        }
+
+        // 获取文件名（如果未提供）
+        const finalFilename = filename || getFilenameFromUrl(downloadUrl) || 'downloaded_file';
+
+        // 使用流式处理大文件
+        if (response.body) {
+            // 创建可读流
+            const reader = response.body.getReader();
+            const chunks: Uint8Array[] = [];
+            let totalBytes = 0;
+
+            // 读取数据流
+            while (true) {
+                const { done, value } = await reader.read();
+
+                if (done) break;
+
+                chunks.push(value);
+                totalBytes += value.length;
+
+                // 发送进度更新（每1MB更新一次）
+                if (totalBytes % (1024 * 1024) === 0) {
+                    const contentLength = response.headers.get('content-length');
+                    const totalSize = contentLength ? parseInt(contentLength, 10) : totalBytes;
+                    const progress = Math.round((totalBytes / totalSize) * 100);
+                    socket.send(JSON.stringify({
+                        ...message,
+                        data: { status: 'downloading', progress, bytesDownloaded: totalBytes }
+                    }));
+                }
+            }
+
+            // 合并所有数据块
+            const fileData = new Uint8Array(totalBytes);
+            let offset = 0;
+            for (const chunk of chunks) {
+                fileData.set(chunk, offset);
+                offset += chunk.length;
+            }
+
+            console.log(`[Background] 文件下载完成，大小: ${totalBytes} 字节`);
+
+            // 发送下载完成状态
+            socket.send(JSON.stringify({
+                ...message,
+                data: { status: 'download_complete', filename: finalFilename, size: totalBytes }
+            }));
+
+            // 上传文件
+            await uploadFile(fileData, uploadUrl, finalFilename, message, socket);
+
+        } else {
+            // 备用方案：直接使用 blob
+            const blob = await response.blob();
+            const arrayBuffer = await blob.arrayBuffer();
+            const fileData = new Uint8Array(arrayBuffer);
+
+            console.log(`[Background] 文件下载完成，大小: ${fileData.length} 字节`);
+
+            // 发送下载完成状态
+            socket.send(JSON.stringify({
+                ...message,
+                data: { status: 'download_complete', filename: finalFilename, size: fileData.length }
+            }));
+
+            // 上传文件
+            await uploadFile(fileData, uploadUrl, finalFilename, message, socket);
+        }
+
+    } catch (error) {
+        console.error('[Background] 下载上传过程中出错:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        socket.send(JSON.stringify({
+            ...message,
+            data: { error: `操作失败: ${errorMessage}` }
+        }));
+    }
+}
+
+// 上传文件到指定站点
+async function uploadFile(
+    fileData: Uint8Array,
+    uploadUrl: string,
+    filename: string,
+    message: MCPMessage,
+    socket: WebSocket
+): Promise<void> {
+    try {
+        console.log(`[Background] 开始上传文件到: ${uploadUrl}`);
+
+        // 发送上传开始状态
+        socket.send(JSON.stringify({
+            ...message,
+            data: { status: 'uploading', progress: 0 }
+        }));
+
+        // 创建 FormData
+        const formData = new FormData();
+        const blob = new Blob([fileData]);
+        formData.append('file', blob, filename);
+
+        // 上传文件
+        const uploadResponse = await fetch(uploadUrl, {
+            method: 'POST',
+            body: formData
+        });
+
+        if (!uploadResponse.ok) {
+            throw new Error(`上传失败: ${uploadResponse.status} ${uploadResponse.statusText}`);
+        }
+
+        const uploadResult = await uploadResponse.json();
+
+        console.log('[Background] 文件上传成功');
+
+        // 发送上传完成状态
+        socket.send(JSON.stringify({
+            ...message,
+            data: {
+                status: 'complete',
+                filename,
+                uploadResult,
+                message: '文件下载并上传成功'
+            }
+        }));
+
+    } catch (error) {
+        console.error('[Background] 上传文件时出错:', error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        socket.send(JSON.stringify({
+            ...message,
+            data: { error: `上传失败: ${errorMessage}` }
+        }));
+    }
+}
+
+// 从URL中提取文件名
+function getFilenameFromUrl(url: string): string | null {
+    try {
+        const urlObj = new URL(url);
+        const pathname = urlObj.pathname;
+        const filename = pathname.split('/').pop();
+        return filename && filename.includes('.') ? filename : null;
+    } catch {
+        return null;
     }
 }
 
