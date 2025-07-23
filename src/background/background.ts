@@ -49,6 +49,20 @@ interface Tab {
 // 全局变量
 let socket: WebSocket | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
+let wsUrl: string = "ws://localhost:8000/ws/1/client"; // 默认URL
+
+// 加载WebSocket配置
+async function loadWSConfig(): Promise<void> {
+    try {
+        const result = await chrome.storage.local.get(['wsUrl']);
+        if (result.wsUrl) {
+            wsUrl = result.wsUrl;
+            console.log(`[Background] 加载WebSocket配置: ${wsUrl}`);
+        }
+    } catch (error) {
+        console.error('[Background] 加载WebSocket配置失败:', error);
+    }
+}
 
 // 命令处理器注册表
 const commandHandlers: CommandHandlers = {
@@ -96,11 +110,12 @@ const commandHandlers: CommandHandlers = {
 
 // 监听来自 content script 的消息
 chrome.runtime.onMessage.addListener((
-    message: { type: string; host?: string; cookies?: string },
+    message: { type: string; host?: string; cookies?: string; wsUrl?: string },
     sender: chrome.runtime.MessageSender,
-    sendResponse: (response: { status: string }) => void
+    sendResponse: (response: { status: string; connected?: boolean }) => void
 ): boolean => {
     console.log('[Background] 收到消息:', message);
+
     if (message.type === 'COOKIES_UPDATED') {
         console.log(`[Background] 🍪 Cookies updated for host: ${message.host}`);
         console.log(`[Background] 📦 Cookies content: ${message.cookies}`);
@@ -108,6 +123,28 @@ chrome.runtime.onMessage.addListener((
         sendResponse({ status: 'success' });
         return true;
     }
+
+    if (message.type === 'UPDATE_WS_CONFIG') {
+        console.log(`[Background] 更新WebSocket配置: ${message.wsUrl}`);
+        wsUrl = message.wsUrl || wsUrl;
+        // 保存到存储
+        chrome.storage.local.set({ wsUrl });
+        // 重新连接
+        if (socket) {
+            socket.close();
+        }
+        connectWebSocket();
+        sendResponse({ status: 'success' });
+        return true;
+    }
+
+    if (message.type === 'CHECK_WS_STATUS') {
+        const connected = !!(socket && socket.readyState === WebSocket.OPEN);
+        console.log(`[Background] 检查WebSocket状态: ${connected ? '已连接' : '未连接'}`);
+        sendResponse({ status: 'success', connected });
+        return true;
+    }
+
     return true;
 });
 
@@ -402,8 +439,7 @@ function handleMessage(message: MCPMessage, socket: WebSocket): void {
 }
 
 function connectWebSocket(): void {
-    const WS_URL = "ws://localhost:8000/ws/1/client"; // 替换为你的后端地址
-    socket = new WebSocket(WS_URL);
+    socket = new WebSocket(wsUrl);
 
     socket.onopen = (): void => {
         console.log("[MCP] ✅ WebSocket connected");
@@ -452,4 +488,5 @@ chrome.alarms.onAlarm.addListener((alarm: chrome.alarms.Alarm) => {
 });
 
 // 初始化连接
+loadWSConfig(); // 加载配置
 connectWebSocket(); 

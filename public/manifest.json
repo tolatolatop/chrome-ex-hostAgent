@@ -3,6 +3,7 @@
     "name": "Host助手",
     "version": "1.0.0",
     "action": {},
+    "options_page": "config/config.html",
     "content_security_policy": {
         "extension_pages": "script-src 'self'; object-src 'self'"
     },

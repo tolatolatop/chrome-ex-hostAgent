@@ -5,7 +5,8 @@ const CopyPlugin = require('copy-webpack-plugin');
 module.exports = {
     entry: {
         content: './src/content/content.js',
-        background: './src/background/background.ts'
+        background: './src/background/background.ts',
+        config: './src/config/config.js'
     },
     output: {
         path: path.resolve(__dirname, 'dist'),
@@ -58,6 +59,15 @@ module.exports = {
             template: './src/side-panel/side-panel.html',
             filename: 'side-panel.html',
             chunks: ['side-panel'],
+            minify: {
+                removeComments: true,
+                collapseWhitespace: true
+            }
+        }),
+        new HtmlWebpackPlugin({
+            template: './src/config/config.html',
+            filename: 'config/config.html',
+            chunks: ['config'],
             minify: {
                 removeComments: true,
                 collapseWhitespace: true
