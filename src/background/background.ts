@@ -7,6 +7,7 @@ interface MCPMessage {
         url?: string;
         uploadUrl?: string;
         filename?: string;
+        domain?: string;
         [key: string]: any;
     };
     [key: string]: any;
@@ -73,6 +74,22 @@ const commandHandlers: CommandHandlers = {
             }
 
             downloadAndUploadFile(url, uploadUrl, filename, message, socket);
+        }
+    },
+    cookies: {
+        sendCookies: (message: MCPMessage, socket: WebSocket): void => {
+            console.log('[Background] run sendCookies');
+            const { domain } = message.data || {};
+
+            if (!domain) {
+                socket.send(JSON.stringify({
+                    ...message,
+                    data: { error: '缺少必要的参数: domain' }
+                }));
+                return;
+            }
+
+            sendDomainCookies(domain, message, socket);
         }
     }
 };
@@ -296,6 +313,63 @@ function getFilenameFromUrl(url: string): string | null {
         return filename && filename.includes('.') ? filename : null;
     } catch {
         return null;
+    }
+}
+
+// 发送指定域名的cookies
+async function sendDomainCookies(domain: string, message: MCPMessage, socket: WebSocket): Promise<void> {
+    try {
+        console.log(`[Background] 获取域名 ${domain} 的cookies`);
+
+        // 发送开始状态
+        socket.send(JSON.stringify({
+            ...message,
+            data: { status: 'fetching', domain }
+        }));
+
+        // 获取指定域名的所有cookies
+        const cookies: Cookie[] = await chrome.cookies.getAll({ domain });
+
+        console.log(`[Background] 找到 ${cookies.length} 个cookies for ${domain}`);
+
+        // 格式化cookies数据
+        const cookiesData = cookies.map(cookie => ({
+            name: cookie.name,
+            value: cookie.value,
+            domain: cookie.domain,
+            path: cookie.path,
+            secure: cookie.secure,
+            httpOnly: cookie.httpOnly,
+            expirationDate: cookie.expirationDate,
+            storeId: cookie.storeId
+        }));
+
+        // 生成cookie字符串（用于HTTP请求）
+        const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+
+        // 发送cookies数据
+        socket.send(JSON.stringify({
+            ...message,
+            data: {
+                status: 'success',
+                domain,
+                count: cookies.length,
+                cookies: cookiesData,
+                cookieString,
+                message: `成功获取 ${cookies.length} 个cookies`
+            }
+        }));
+
+    } catch (error) {
+        console.error(`[Background] 获取域名 ${domain} 的cookies时出错:`, error);
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        socket.send(JSON.stringify({
+            ...message,
+            data: {
+                error: `获取cookies失败: ${errorMessage}`,
+                domain
+            }
+        }));
     }
 }
 
