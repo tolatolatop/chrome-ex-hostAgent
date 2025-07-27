@@ -19,7 +19,9 @@
         "*://*.baidu.com/*",
         "*://*.example.com/*",
         "http://localhost:*/*",
-        "ws://localhost:*/*"
+        "ws://localhost:*/*",
+        "*://*.bilibili.com/*",
+        "*://*.youtube.com/*"
     ],
     "content_scripts": [
         {
