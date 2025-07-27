@@ -1,26 +1,73 @@
-// 类型定义
-interface MCPMessage {
-    type: string;
-    data?: {
-        type: string;
-        name: string;
-        url?: string;
-        uploadUrl?: string;
-        filename?: string;
-        domain?: string;
-        [key: string]: any;
-    };
-    [key: string]: any;
+// 消息类型枚举
+enum MessageType {
+    PING = "ping",
+    PONG = "pong",
+    COMMAND = "command",
+    DATA = "data",
+    CLIENT_ID = "client_id"
 }
 
+// 基础消息接口
+interface BaseMessage {
+    type: MessageType;
+    timestamp: string;
+    client_id?: string;
+}
+
+// 客户端ID消息
+interface ClientIdMessage extends BaseMessage {
+    type: MessageType.CLIENT_ID;
+    client_id: string;
+}
+
+// Ping/Pong消息
+interface PingPongMessage extends BaseMessage {
+    type: MessageType.PING | MessageType.PONG;
+    client_id?: string;
+}
+
+// 命令消息
+interface CommandMessage extends BaseMessage {
+    type: MessageType.COMMAND;
+    client_id: string;
+    receiver: string;
+    command: string;
+    data?: Record<string, any>;
+    request_id?: string;
+}
+
+// 命令结果消息
+interface CommandResultMessage extends BaseMessage {
+    type: MessageType.COMMAND;
+    client_id: string;
+    receiver: string;
+    request_id: string;
+    success: boolean;
+    result?: Record<string, any>;
+    error?: string;
+}
+
+// 数据消息
+interface DataMessage extends BaseMessage {
+    type: MessageType.DATA;
+    client_id: string;
+    receiver: string;
+    data: string;
+    chunk_index: number;
+    total_chunks: number;
+    is_final: boolean;
+}
+
+// 联合类型
+type WebSocketMessage = ClientIdMessage | PingPongMessage | CommandMessage | CommandResultMessage | DataMessage;
+
+// 命令处理器类型
 interface CommandHandler {
-    (message: MCPMessage, socket: WebSocket): void;
+    (message: CommandMessage, socket: WebSocket): void;
 }
 
 interface CommandHandlers {
-    [type: string]: {
-        [name: string]: CommandHandler;
-    };
+    [command: string]: CommandHandler;
 }
 
 interface Cookie {
@@ -50,6 +97,29 @@ interface Tab {
 let socket: WebSocket | null = null;
 let reconnectTimer: NodeJS.Timeout | null = null;
 let wsUrl: string = "ws://localhost:8000/ws/1/client"; // 默认URL
+let clientId: string = "chrome-extension-" + Math.random().toString(36).substr(2, 9);
+let isClientIdAssigned: boolean = false;
+
+// 发送命令结果
+function sendCommandResult(
+    socket: WebSocket,
+    originalMessage: CommandMessage,
+    success: boolean,
+    result?: Record<string, any>,
+    error?: string
+): void {
+    const response: CommandResultMessage = {
+        type: MessageType.COMMAND,
+        client_id: clientId,
+        receiver: originalMessage.client_id,
+        request_id: originalMessage.request_id || "",
+        success,
+        result,
+        error,
+        timestamp: new Date().toISOString()
+    };
+    socket.send(JSON.stringify(response));
+}
 
 // 加载WebSocket配置
 async function loadWSConfig(): Promise<void> {
@@ -66,45 +136,35 @@ async function loadWSConfig(): Promise<void> {
 
 // 命令处理器注册表
 const commandHandlers: CommandHandlers = {
-    fetch: {
-        visitBaidu: (message: MCPMessage, socket: WebSocket): void => {
-            console.log('[Background] run visitBaidu');
-            visitBaidu((response: Response) => {
-                response.text().then((text: string) => {
-                    socket.send(JSON.stringify({ ...message, data: { text } }));
-                });
+    visitBaidu: (message: CommandMessage, socket: WebSocket): void => {
+        console.log('[Background] run visitBaidu');
+        visitBaidu((response: Response) => {
+            response.text().then((text: string) => {
+                sendCommandResult(socket, message, true, { text });
             });
-        },
-        downloadAndUpload: (message: MCPMessage, socket: WebSocket): void => {
-            console.log('[Background] run downloadAndUpload');
-            const { url, uploadUrl, filename } = message.data || {};
-
-            if (!url || !uploadUrl) {
-                socket.send(JSON.stringify({
-                    ...message,
-                    data: { error: '缺少必要的参数: url 或 uploadUrl' }
-                }));
-                return;
-            }
-
-            downloadAndUploadFile(url, uploadUrl, filename, message, socket);
-        }
+        });
     },
-    cookies: {
-        sendCookies: (message: MCPMessage, socket: WebSocket): void => {
-            console.log('[Background] run sendCookies');
-            const { domain } = message.data || {};
+    downloadAndUpload: (message: CommandMessage, socket: WebSocket): void => {
+        console.log('[Background] run downloadAndUpload');
+        const { url, uploadUrl, filename } = message.data || {};
 
-            if (!domain) {
-                socket.send(JSON.stringify({
-                    ...message,
-                    data: { error: '缺少必要的参数: domain' }
-                }));
-                return;
-            }
-
-            sendDomainCookies(domain, message, socket);
+        if (!url || !uploadUrl) {
+            sendCommandResult(socket, message, false, undefined, '缺少必要的参数: url 或 uploadUrl');
+            return;
         }
+
+        downloadAndUploadFile(url, uploadUrl, filename, message, socket);
+    },
+    sendCookies: (message: CommandMessage, socket: WebSocket): void => {
+        console.log('[Background] run sendCookies');
+        const { domain } = message.data || {};
+
+        if (!domain) {
+            sendCommandResult(socket, message, false, undefined, '缺少必要的参数: domain');
+            return;
+        }
+
+        sendDomainCookies(domain, message, socket);
     }
 };
 
@@ -148,19 +208,6 @@ chrome.runtime.onMessage.addListener((
     return true;
 });
 
-// 请求所有标签页更新 cookies
-function requestCookiesUpdate(): void {
-    chrome.tabs.query({}, (tabs: Tab[]) => {
-        tabs.forEach((tab: Tab) => {
-            if (tab.url && tab.url.includes('baidu.com') && tab.id) {
-                chrome.tabs.sendMessage(tab.id, { type: 'REQUEST_COOKIES' }, (response: any) => {
-                    console.log(`[Background] 请求 ${tab.url} 更新 cookies 的响应:`, response);
-                });
-            }
-        });
-    });
-}
-
 // 访问baidu.com
 async function visitBaidu(callback: (response: Response) => void): Promise<void> {
     try {
@@ -187,17 +234,14 @@ async function downloadAndUploadFile(
     downloadUrl: string,
     uploadUrl: string,
     filename: string | undefined,
-    message: MCPMessage,
+    message: CommandMessage,
     socket: WebSocket
 ): Promise<void> {
     try {
         console.log(`[Background] 开始下载文件: ${downloadUrl}`);
 
         // 发送进度更新
-        socket.send(JSON.stringify({
-            ...message,
-            data: { status: 'downloading', progress: 0 }
-        }));
+        sendCommandResult(socket, message, true, { status: 'downloading', progress: 0 });
 
         // 下载文件
         const response = await fetch(downloadUrl);
@@ -230,10 +274,7 @@ async function downloadAndUploadFile(
                     const contentLength = response.headers.get('content-length');
                     const totalSize = contentLength ? parseInt(contentLength, 10) : totalBytes;
                     const progress = Math.round((totalBytes / totalSize) * 100);
-                    socket.send(JSON.stringify({
-                        ...message,
-                        data: { status: 'downloading', progress, bytesDownloaded: totalBytes }
-                    }));
+                    sendCommandResult(socket, message, true, { status: 'downloading', progress, bytesDownloaded: totalBytes });
                 }
             }
 
@@ -248,10 +289,7 @@ async function downloadAndUploadFile(
             console.log(`[Background] 文件下载完成，大小: ${totalBytes} 字节`);
 
             // 发送下载完成状态
-            socket.send(JSON.stringify({
-                ...message,
-                data: { status: 'download_complete', filename: finalFilename, size: totalBytes }
-            }));
+            sendCommandResult(socket, message, true, { status: 'download_complete', filename: finalFilename, size: totalBytes });
 
             // 上传文件
             await uploadFile(fileData, uploadUrl, finalFilename, message, socket);
@@ -265,10 +303,7 @@ async function downloadAndUploadFile(
             console.log(`[Background] 文件下载完成，大小: ${fileData.length} 字节`);
 
             // 发送下载完成状态
-            socket.send(JSON.stringify({
-                ...message,
-                data: { status: 'download_complete', filename: finalFilename, size: fileData.length }
-            }));
+            sendCommandResult(socket, message, true, { status: 'download_complete', filename: finalFilename, size: fileData.length });
 
             // 上传文件
             await uploadFile(fileData, uploadUrl, finalFilename, message, socket);
@@ -277,10 +312,7 @@ async function downloadAndUploadFile(
     } catch (error) {
         console.error('[Background] 下载上传过程中出错:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        socket.send(JSON.stringify({
-            ...message,
-            data: { error: `操作失败: ${errorMessage}` }
-        }));
+        sendCommandResult(socket, message, false, undefined, `操作失败: ${errorMessage}`);
     }
 }
 
@@ -289,17 +321,14 @@ async function uploadFile(
     fileData: Uint8Array,
     uploadUrl: string,
     filename: string,
-    message: MCPMessage,
+    message: CommandMessage,
     socket: WebSocket
 ): Promise<void> {
     try {
         console.log(`[Background] 开始上传文件到: ${uploadUrl}`);
 
         // 发送上传开始状态
-        socket.send(JSON.stringify({
-            ...message,
-            data: { status: 'uploading', progress: 0 }
-        }));
+        sendCommandResult(socket, message, true, { status: 'uploading', progress: 0 });
 
         // 创建 FormData
         const formData = new FormData();
@@ -321,23 +350,17 @@ async function uploadFile(
         console.log('[Background] 文件上传成功');
 
         // 发送上传完成状态
-        socket.send(JSON.stringify({
-            ...message,
-            data: {
-                status: 'complete',
-                filename,
-                uploadResult,
-                message: '文件下载并上传成功'
-            }
-        }));
+        sendCommandResult(socket, message, true, {
+            status: 'complete',
+            filename,
+            uploadResult,
+            message: '文件下载并上传成功'
+        });
 
     } catch (error) {
         console.error('[Background] 上传文件时出错:', error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        socket.send(JSON.stringify({
-            ...message,
-            data: { error: `上传失败: ${errorMessage}` }
-        }));
+        sendCommandResult(socket, message, false, undefined, `上传失败: ${errorMessage}`);
     }
 }
 
@@ -354,15 +377,9 @@ function getFilenameFromUrl(url: string): string | null {
 }
 
 // 发送指定域名的cookies
-async function sendDomainCookies(domain: string, message: MCPMessage, socket: WebSocket): Promise<void> {
+async function sendDomainCookies(domain: string, message: CommandMessage, socket: WebSocket): Promise<void> {
     try {
         console.log(`[Background] 获取域名 ${domain} 的cookies`);
-
-        // 发送开始状态
-        socket.send(JSON.stringify({
-            ...message,
-            data: { status: 'fetching', domain }
-        }));
 
         // 获取指定域名的所有cookies
         const cookies: Cookie[] = await chrome.cookies.getAll({ domain });
@@ -385,57 +402,66 @@ async function sendDomainCookies(domain: string, message: MCPMessage, socket: We
         const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
 
         // 发送cookies数据
-        socket.send(JSON.stringify({
-            ...message,
-            data: {
-                status: 'success',
-                domain,
-                count: cookies.length,
-                cookies: cookiesData,
-                cookieString,
-                message: `成功获取 ${cookies.length} 个cookies`
-            }
-        }));
+        sendCommandResult(socket, message, true, {
+            status: 'success',
+            domain,
+            count: cookies.length,
+            cookies: cookiesData,
+            cookieString,
+            message: `成功获取 ${cookies.length} 个cookies`
+        });
 
     } catch (error) {
         console.error(`[Background] 获取域名 ${domain} 的cookies时出错:`, error);
         const errorMessage = error instanceof Error ? error.message : String(error);
-        socket.send(JSON.stringify({
-            ...message,
-            data: {
-                error: `获取cookies失败: ${errorMessage}`,
-                domain
-            }
-        }));
+        sendCommandResult(socket, message, false, undefined, `获取cookies失败: ${errorMessage}`);
     }
 }
 
 // 处理接收到的消息
-function handleMessage(message: MCPMessage, socket: WebSocket): void {
+function handleMessage(message: WebSocketMessage, socket: WebSocket): void {
     console.log("[MCP] 📩 Received:", message);
 
-    if (message.type === "ping") {
+    if (message.type === MessageType.CLIENT_ID) {
+        const clientIdMessage = message as ClientIdMessage;
+        clientId = clientIdMessage.client_id;
+        isClientIdAssigned = true;
+        console.log(`[Background] 客户端ID已分配: ${clientId}`);
         return;
     }
 
-    if (message.data !== undefined) {
-        const { type, name } = message.data;
-        if (type && name && commandHandlers[type] && commandHandlers[type][name]) {
-            console.log(`[Background] 执行命令: ${type}.${name}`);
-            commandHandlers[type][name](message, socket);
+    if (message.type === MessageType.PING) {
+        socket.send(JSON.stringify({
+            type: MessageType.PONG,
+            timestamp: new Date().toISOString(),
+            client_id: clientId
+        }));
+        return;
+    }
+
+    if (message.type === MessageType.COMMAND) {
+        const commandMessage = message as CommandMessage;
+        const { command, data } = commandMessage;
+
+        if (command && commandHandlers[command]) {
+            console.log(`[Background] 执行命令: ${command}`);
+            commandHandlers[command](commandMessage, socket);
         } else {
-            console.log(`[Background] 未知命令: ${type}.${name}`);
-            socket.send(JSON.stringify({
-                ...message,
-                data: {
-                    text: `Unsupported command: ${type}.${name}`
-                }
-            }));
+            console.log(`[Background] 未知命令: ${command}`);
+            sendCommandResult(socket, commandMessage, false, undefined, `Unsupported command: ${command}`);
         }
         return;
     }
 
-    socket.send(JSON.stringify(message));
+    if (message.type === MessageType.DATA) {
+        const dataMessage = message as DataMessage;
+        // 处理数据消息，例如累积数据或转发
+        console.log(`[Background] 接收数据消息 (chunk_index: ${dataMessage.chunk_index})`);
+        // 示例：如果需要累积数据，可以在这里处理
+    }
+
+    // 打印未知消息类型
+    console.log(`[Background] 未知消息类型: ${message.type}`);
 }
 
 function connectWebSocket(): void {
@@ -443,11 +469,15 @@ function connectWebSocket(): void {
 
     socket.onopen = (): void => {
         console.log("[MCP] ✅ WebSocket connected");
+        // 连接建立后，如果没有分配客户端ID，可以发送请求获取
+        if (!isClientIdAssigned) {
+            console.log("[MCP] 等待服务器分配客户端ID...");
+        }
     };
 
     socket.onmessage = (event: MessageEvent): void => {
         try {
-            const message: MCPMessage = JSON.parse(event.data);
+            const message: WebSocketMessage = JSON.parse(event.data);
             handleMessage(message, socket!);
         } catch (error) {
             console.error("[MCP] ❌ Failed to parse message:", error);
@@ -475,17 +505,6 @@ function connectWebSocket(): void {
         }
     };
 }
-
-// 定时 ping 防止被 Chrome 挂起
-chrome.alarms.create("mcp_keep_alive", { periodInMinutes: 1 });
-chrome.alarms.onAlarm.addListener((alarm: chrome.alarms.Alarm) => {
-    if (alarm.name === "mcp_keep_alive") {
-        if (socket && socket.readyState === WebSocket.OPEN) {
-            socket.send(JSON.stringify({ type: "ping" }));
-            console.log("[MCP] 🔁 Ping sent to keep alive");
-        }
-    }
-});
 
 // 初始化连接
 loadWSConfig(); // 加载配置
