@@ -420,7 +420,6 @@ async function sendDomainCookies(domain: string, message: CommandMessage, socket
 
 // 处理接收到的消息
 function handleMessage(message: WebSocketMessage, socket: WebSocket): void {
-    console.log("[MCP] 📩 Received:", message);
 
     if (message.type === MessageType.CLIENT_ID) {
         const clientIdMessage = message as ClientIdMessage;
