@@ -21,6 +21,7 @@
         "http://localhost:*/*",
         "ws://localhost:*/*",
         "*://*.bilibili.com/*",
+        "*://*.bilivideo.com/*",
         "*://*.youtube.com/*"
     ],
     "content_scripts": [
