@@ -537,5 +537,8 @@ function connectWebSocket(): void {
 }
 
 // 初始化连接
-loadWSConfig(); // 加载配置
-connectWebSocket(); 
+loadWSConfig().then(() => {
+    connectWebSocket();
+}).catch((error) => {
+    console.error('[Background] 加载WebSocket配置失败:', error);
+});
