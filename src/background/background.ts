@@ -166,6 +166,42 @@ const commandHandlers: CommandHandlers = {
             });
         });
     },
+    commonFetch: (message: CommandMessage, socket: WebSocket): void => {
+        console.log('[Background] run commonFetch');
+        try {
+            const { url, method, headers, body } = message.data || {};
+
+            // 检查必要字段是否存在
+            if (!url) {
+                const errorMsg = '缺少必要参数: url';
+                console.error(`[Background] commonFetch错误: ${errorMsg}`);
+                console.error('[Background] message.data内容:', message.data);
+                sendCommandResult(socket, message, false, undefined, errorMsg);
+                return;
+            }
+
+            if (!method) {
+                const errorMsg = '缺少必要参数: method';
+                console.error(`[Background] commonFetch错误: ${errorMsg}`);
+                console.error('[Background] message.data内容:', message.data);
+                sendCommandResult(socket, message, false, undefined, errorMsg);
+                return;
+            }
+
+            commonFetch(url, method, headers || {}, body).then((response: Response) => {
+                response.text().then((text: string) => {
+                    sendCommandResult(socket, message, true, { text });
+                });
+            }).catch((error: Error) => {
+                console.error('[Background] commonFetch执行失败:', error);
+                sendCommandResult(socket, message, false, undefined, `commonFetch失败: ${error.message}`);
+            });
+        } catch (error) {
+            console.error('[Background] commonFetch参数解析失败:', error);
+            console.error('[Background] message.data内容:', message.data);
+            sendCommandResult(socket, message, false, undefined, `commonFetch失败: ${error instanceof Error ? error.message : String(error) || '未知错误'}`);
+        }
+    },
     downloadAndUpload: (message: CommandMessage, socket: WebSocket): void => {
         console.log('[Background] run downloadAndUpload');
         const { url, uploadUrl, filename } = message.data || {};
@@ -248,6 +284,52 @@ async function visitBaidu(callback: (response: Response) => void): Promise<void>
         callback(response);
     } catch (error) {
         console.error('[Background] 访问百度时出错:', error);
+    }
+}
+
+async function commonFetch(url: string, method: string, headers: Record<string, string>, body: any): Promise<Response> {
+    try {
+        // 验证URL格式
+        if (!url || typeof url !== 'string') {
+            throw new Error('无效的URL格式');
+        }
+
+        let domain: string;
+        try {
+            domain = new URL(url).hostname;
+        } catch (urlError) {
+            console.error('[Background] URL解析失败:', url, urlError);
+            throw new Error(`无效的URL格式: ${url}`);
+        }
+
+        if (!domain) {
+            throw new Error('无法从URL中提取域名');
+        }
+
+        const topDomain = domain.split('.').slice(-2).join('.');
+        const cookies: Cookie[] = await chrome.cookies.getAll({ domain: topDomain });
+        const cookieString = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ');
+
+        const apiHeaders = {
+            'Content-Type': 'application/json',
+            'Cookie': cookieString
+        };
+
+        const newHeaders = {
+            ...headers,
+            ...apiHeaders
+        };
+
+        const response = await fetch(url, {
+            method,
+            headers: newHeaders,
+            body
+        });
+
+        return response;
+    } catch (error) {
+        console.error('[Background] commonFetch执行出错:', error);
+        throw error;
     }
 }
 
