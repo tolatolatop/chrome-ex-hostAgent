@@ -16,6 +16,7 @@ class WSConfigManager {
         this.loadConfig();
         this.bindEvents();
         this.checkConnectionStatus();
+        this.listenForBackgroundMessages();
     }
 
     bindEvents() {
@@ -195,6 +196,26 @@ class WSConfigManager {
     updateConnectionStatus(status, text) {
         this.statusIndicator.className = `status-indicator ${status}`;
         this.statusText.textContent = text;
+    }
+
+    // 监听来自background script的消息
+    listenForBackgroundMessages() {
+        chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+            if (message.type === 'WS_CONNECTION_STATUS') {
+                this.handleConnectionStatusUpdate(message.connected);
+            }
+        });
+    }
+
+    // 处理连接状态更新
+    handleConnectionStatusUpdate(connected) {
+        if (connected) {
+            this.updateConnectionStatus('connected', '已连接');
+            this.showStatus('WebSocket连接已建立', 'success');
+        } else {
+            this.updateConnectionStatus('disconnected', '连接已断开');
+            this.showStatus('WebSocket连接已断开', 'error');
+        }
     }
 
     // 显示状态消息

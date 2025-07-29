@@ -121,6 +121,28 @@ function sendCommandResult(
     socket.send(JSON.stringify(response));
 }
 
+// 通知config页面连接状态变化
+function notifyConfigConnectionStatus(connected: boolean): void {
+    try {
+        // 查找config页面并发送状态更新消息
+        chrome.tabs.query({ url: chrome.runtime.getURL('src/config/config.html') }, (tabs) => {
+            tabs.forEach((tab) => {
+                if (tab.id) {
+                    chrome.tabs.sendMessage(tab.id, {
+                        type: 'WS_CONNECTION_STATUS',
+                        connected: connected
+                    }).catch((error) => {
+                        // 忽略错误，因为config页面可能没有打开
+                        console.log('[Background] Config页面未打开或无法接收消息');
+                    });
+                }
+            });
+        });
+    } catch (error) {
+        console.log('[Background] 通知config页面失败:', error);
+    }
+}
+
 // 加载WebSocket配置
 async function loadWSConfig(): Promise<void> {
     try {
@@ -472,6 +494,9 @@ function connectWebSocket(): void {
         if (!isClientIdAssigned) {
             console.log("[MCP] 等待服务器分配客户端ID...");
         }
+
+        // 通知config页面连接状态已更新
+        notifyConfigConnectionStatus(true);
     };
 
     socket.onmessage = (event: MessageEvent): void => {
@@ -485,6 +510,9 @@ function connectWebSocket(): void {
 
     socket.onclose = (): void => {
         console.warn("[MCP] 🔌 Connection closed. Reconnecting in 3s...");
+        // 通知config页面连接已断开
+        notifyConfigConnectionStatus(false);
+
         if (!reconnectTimer) {
             reconnectTimer = setTimeout(() => {
                 reconnectTimer = null;  // 清除定时器引用
@@ -496,6 +524,9 @@ function connectWebSocket(): void {
     socket.onerror = (err: Event): void => {
         console.error("[MCP] ❌ WebSocket error", err);
         console.warn("[MCP] 🔌 Connection failed. Reconnecting in 10s...");
+        // 通知config页面连接失败
+        notifyConfigConnectionStatus(false);
+
         if (!reconnectTimer) {
             reconnectTimer = setTimeout(() => {
                 reconnectTimer = null;  // 清除定时器引用
