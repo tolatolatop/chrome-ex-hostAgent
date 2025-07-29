@@ -547,10 +547,10 @@ function handleMessage(message: WebSocketMessage, socket: WebSocket): void {
         const { command, data } = commandMessage;
 
         if (command && commandHandlers[command]) {
-            console.log(`[Background] 执行命令: ${command}`);
+            console.log(`[Background] 执行命令: ${command} request_id: ${commandMessage.request_id}`);
             commandHandlers[command](commandMessage, socket);
         } else {
-            console.log(`[Background] 未知命令: ${command}`);
+            console.log(`[Background] 未知命令: ${command} request_id: ${commandMessage.request_id}`);
             sendCommandResult(socket, commandMessage, false, undefined, `Unsupported command: ${command}`);
         }
         return;
