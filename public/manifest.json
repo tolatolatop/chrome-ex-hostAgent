@@ -15,7 +15,8 @@
         "tabs",
         "cookies",
         "storage",
-        "alarms"
+        "alarms",
+        "notifications"
     ],
     "host_permissions": [
         "*://*.baidu.com/*",

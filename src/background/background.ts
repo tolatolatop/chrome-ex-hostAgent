@@ -121,6 +121,21 @@ function sendCommandResult(
     socket.send(JSON.stringify(response));
 }
 
+// 显示Chrome通知
+function showNotification(title: string, message: string, type: 'success' | 'error' = 'success'): void {
+    try {
+        chrome.notifications.create({
+            type: 'basic',
+            iconUrl: './images/notice.png',
+            title: title,
+            message: message,
+            priority: type === 'error' ? 2 : 1
+        });
+    } catch (error) {
+        console.log('[Background] 显示通知失败:', error);
+    }
+}
+
 // 通知config页面连接状态变化
 function notifyConfigConnectionStatus(connected: boolean): void {
     try {
@@ -138,6 +153,14 @@ function notifyConfigConnectionStatus(connected: boolean): void {
                 }
             });
         });
+
+        // 显示Chrome通知
+        console.log('[Background] 显示Chrome通知');
+        if (connected) {
+            showNotification('WebSocket 连接成功', '已成功连接到服务器', 'success');
+        } else {
+            showNotification('WebSocket 连接断开', '与服务器的连接已断开，正在尝试重连...', 'error');
+        }
     } catch (error) {
         console.log('[Background] 通知config页面失败:', error);
     }
