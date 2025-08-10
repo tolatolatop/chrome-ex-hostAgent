@@ -246,6 +246,32 @@ const commandHandlers: CommandHandlers = {
         }
 
         sendDomainCookies(domain, message, socket);
+    },
+    notify: (message: CommandMessage, socket: WebSocket): void => {
+        console.log('[Background] run notify');
+        try {
+            const { title, message: notificationMessage, type } = message.data || {};
+
+            // 从data字段获取必要参数，如果不存在则默认为"未知"
+            const notificationTitle = title || '未知';
+            const notificationText = notificationMessage || '未知';
+            const notificationType = type || 'success';
+
+            console.log(`[Background] 发送通知: ${notificationTitle} - ${notificationText} (类型: ${notificationType})`);
+
+            // 调用showNotification函数显示Chrome通知
+            showNotification(notificationTitle, notificationText, notificationType as 'success' | 'error');
+
+            // 发送成功响应
+            sendCommandResult(socket, message, true, {
+                title: notificationTitle,
+                message: notificationText,
+                type: notificationType
+            });
+        } catch (error) {
+            console.error('[Background] notify命令执行失败:', error);
+            sendCommandResult(socket, message, false, undefined, `notify失败: ${error instanceof Error ? error.message : String(error) || '未知错误'}`);
+        }
     }
 };
 
