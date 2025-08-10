@@ -44,18 +44,22 @@ function checkAndFillForm() {
         return;
     }
 
-    console.log('[ContentAutoAuth] 找到input节点，开始填充"test_user"');
+    chrome.storage.local.get('wsUrl').then((result: { [key: string]: any }) => {
+        const wsUrl = result.wsUrl;
+        const username = wsUrl.split('/')[wsUrl.split('/').length - 1];
+        console.log('[ContentAutoAuth] 找到input节点，开始填充"' + username + '"');
 
-    // 填充"test_user"字段
-    inputElement.value = 'test_user';
+        // 填充username字段
+        inputElement.value = username;
 
-    // 触发input事件以确保页面能检测到值的变化
-    inputElement.dispatchEvent(new Event('input', { bubbles: true }));
-    inputElement.dispatchEvent(new Event('change', { bubbles: true }));
+        // 触发input事件以确保页面能检测到值的变化
+        inputElement.dispatchEvent(new Event('input', { bubbles: true }));
+        inputElement.dispatchEvent(new Event('change', { bubbles: true }));
 
-    console.log('[ContentAutoAuth] 填充完成，已设置值为"test_user"');
-    startChatButton.click();
-    console.log('[ContentAutoAuth] 点击"Start Chat"按钮');
+        console.log('[ContentAutoAuth] 填充完成，已设置值为"' + username + '"');
+        startChatButton.click();
+        console.log('[ContentAutoAuth] 点击"Start Chat"按钮');
+    });
 }
 
 // 页面加载完成后执行检查
