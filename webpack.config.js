@@ -6,7 +6,8 @@ module.exports = {
     entry: {
         content: './src/content/content.js',
         background: './src/background/background.ts',
-        config: './src/config/config.js'
+        config: './src/config/config.js',
+        'side-panel': './src/side-panel/index.tsx'
     },
     output: {
         path: path.resolve(__dirname, 'dist'),

@@ -624,3 +624,6 @@ loadWSConfig().then(() => {
 }).catch((error) => {
     console.error('[Background] 加载WebSocket配置失败:', error);
 });
+
+// 初始化side-panel
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true });
