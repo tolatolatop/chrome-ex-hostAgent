@@ -17,18 +17,18 @@ function checkAndFillForm() {
 
     console.log('[ContentAutoAuth] 找到"Start Chat"按钮，开始执行填充逻辑');
 
-    // 查找包含"用户名"文本的div
+    // 查找包含"用户Token"文本的div
     const usernameDiv = Array.from(document.querySelectorAll('div')).find(div =>
-        div.textContent?.includes('用户名') ||
-        div.innerText?.includes('用户名')
+        div.textContent?.includes('用户Token') ||
+        div.innerText?.includes('用户Token')
     );
 
     if (!usernameDiv) {
-        console.log('[ContentAutoAuth] 未找到包含"用户名"的div');
+        console.log('[ContentAutoAuth] 未找到包含"用户Token"的div');
         return;
     }
 
-    console.log('[ContentAutoAuth] 找到包含"用户名"的div');
+    console.log('[ContentAutoAuth] 找到包含"用户Token"的div');
 
     // 找到其父节点的父节点
     const grandparent = usernameDiv.parentElement?.parentElement;
