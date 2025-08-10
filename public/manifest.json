@@ -35,6 +35,16 @@
                 "content.js"
             ],
             "run_at": "document_end"
+        },
+        {
+            "matches": [
+                "*://localhost/chat/*"
+            ],
+            "js": [
+                "content_autoauth.js"
+            ],
+            "run_at": "document_end",
+            "all_frames": true
         }
     ],
     "background": {

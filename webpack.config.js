@@ -5,6 +5,7 @@ const CopyPlugin = require('copy-webpack-plugin');
 module.exports = {
     entry: {
         content: './src/content/content.js',
+        'content_autoauth': './src/content/content_autoauth.tsx',
         background: './src/background/background.ts',
         config: './src/config/config.js',
         'side-panel': './src/side-panel/index.tsx'
